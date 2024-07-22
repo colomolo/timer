@@ -94,14 +94,49 @@ function run(argv) {
     return new Intl.DateTimeFormat('en-US', options).format(showTime);
   };
 
+  const parseSpecificTime = (input) => {
+    const timePattern = /at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm|a|p)?/i;
+    const match = input.match(timePattern);
+
+    if (!match) return null;
+
+    let [, hour, minute = '00', period] = match;
+    hour = parseInt(hour, 10);
+    minute = parseInt(minute, 10);
+
+    if (period) {
+      period = period.toLowerCase();
+      if ((period === 'pm' || period === 'p') && hour < 12) hour += 12;
+      if ((period === 'am' || period === 'a') && hour === 12) hour = 0;
+    }
+
+    const now = new Date();
+    const targetTime = new Date(now);
+    targetTime.setHours(hour, minute, 0, 0);
+
+    if (targetTime <= now) {
+      // If time is earlier today, set the target to tomorrow at the same time
+      targetTime.setDate(targetTime.getDate() + 1);
+    }
+
+    const secondsUntilTarget = Math.round((targetTime - now) / 1000);
+    return secondsUntilTarget;
+  };
+
   const createArgumentItem = () => {
-    const timeMap = inputToTimeMap(argv[0] || defaultDuration);
-    const seconds = timeMapToSeconds(timeMap);
+    let timeMap = inputToTimeMap(argv[0] || defaultDuration);
+    let seconds = timeMapToSeconds(timeMap);
     const readableTime = timeMapToReadableTime(timeMap);
     let title = '';
     let subtitle = '';
 
-    if (!argv[0]) {
+    const specificTimeSeconds = parseSpecificTime(argv[0]);
+
+    if (specificTimeSeconds != null) {
+      seconds = specificTimeSeconds;
+      title = `Set timer for time: ${argv[0]}`;
+      subtitle = `Will fire at ${calculateFireTime(seconds)}`;
+    } else if (!argv[0]) {
       title = 'Set timer...';
       subtitle = `Hit ↵ to set to ${readableTime} or provide duration`;
     } else if (isValidTimeMap(timeMap)) {
